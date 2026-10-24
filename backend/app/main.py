@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 from backend.app.config import settings
 from backend.app.database import engine, Base, SessionLocal
+import backend.app.models
 from backend.app.seed_data.seed_database import seed_database
 from backend.app.api.jurisdictions import router as jurisdictions_router
 from backend.app.api.assistant import router as assistant_router

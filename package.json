@@ -5,6 +5,7 @@
   "description": "NyayaMitra - India Legal Rights Awareness Assistant & Privacy-First Document Simplifier",
   "scripts": {
     "dev": "npm --prefix frontend run dev",
+    "start": "npm --prefix frontend run dev",
     "build": "npm --prefix frontend run build",
     "install:frontend": "npm --prefix frontend install",
     "backend": "PYTHONPATH=. backend/venv/bin/uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload",

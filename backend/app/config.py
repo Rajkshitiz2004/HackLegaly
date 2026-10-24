@@ -7,10 +7,10 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api"
     
-    # Database
+    # Database (defaults to local SQLite for instant zero-dependency execution)
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL", 
-        "postgresql://mokshinisingh:@localhost:5432/legal_assistant_db"
+        "sqlite:///./legal_assistant.db"
     )
     
     # Security & Privacy

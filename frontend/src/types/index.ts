@@ -2,178 +2,159 @@ export interface Jurisdiction {
   id: string;
   code: string;
   name: string;
-  level: string;
-  parent_id?: string | null;
+  country: string;
+  state_or_region: string | null;
+  is_active: boolean;
 }
 
 export interface NextStep {
-  id?: string;
   title: string;
   description: string;
-  step_order: number;
-  is_completed: boolean;
-  rationale?: string | null;
-  required_info?: string | null;
+  rationale?: string;
+  required_information?: string;
+  is_completed?: boolean;
+  is_verified_requirement: boolean;
 }
 
-export interface LegalAssistantResponse {
+export interface SourceCitation {
+  act_title: string;
+  short_title: string;
+  citation?: string;
+  section_number: string;
+  section_title: string;
+  official_url: string;
+  issuing_organization: string;
+  plain_summary: string;
+  content_snippet: string;
+  is_verified: boolean;
+}
+
+export interface LegalAidResource {
+  id: string;
+  name: string;
+  organization: string;
+  resource_type: string;
+  official_url: string;
+  contact_phone?: string;
+  email?: string;
+  address?: string;
+  description: string;
+  referral_reason?: string;
+}
+
+export interface AssistantResponse {
   query_id: string;
-  response_id: string;
   simple_explanation: string;
   legal_information: string;
-  conditions_exceptions?: string | null;
-  practical_steps?: string | null;
-  professional_help_advice?: string | null;
-  evidence_sufficiency: string;
-  confidence_score: number;
-  ai_provider: string;
-  model_name: string;
-  is_demo_mode: boolean;
-  created_at: string;
+  conditions_and_exceptions: string;
+  professional_help_advice: string;
+  confidence_level: string;
+  ai_model: string;
+  disclaimer: string;
   next_steps: NextStep[];
-  sources: Array<{
-    source_id?: string;
-    title: string;
-    short_name: string;
-    section_number?: string;
-    provision_title?: string;
-    excerpt?: string;
-    official_url?: string;
-    issuing_authority?: string;
-  }>;
+  sources: SourceCitation[];
+  resources: LegalAidResource[];
 }
 
 export interface SensitiveFinding {
   id?: string;
   entity_type: string;
   detected_text: string;
-  start_char: number;
-  end_char: number;
+  start_offset: number;
+  end_offset: number;
   confidence_score: number;
   is_redacted: boolean;
-  replacement_placeholder: string;
+  placeholder: string;
+  scan_stage: string;
 }
 
-export interface DetectPrivacyResponse {
-  total_findings: number;
-  findings: SensitiveFinding[];
-  content_hash: string;
-}
-
-export interface RedactResponse {
-  redacted_text: string;
-  content_hash: string;
-  total_redacted: number;
-  applied_actions: Array<{
-    action_type: string;
-    original_value_masked: string;
-    placeholder_used: string;
-    start_char: number;
-    end_char: number;
-  }>;
-}
-
-export interface SecondScanResponse {
-  scan_type: string;
-  total_residual_findings: number;
-  is_clean: boolean;
-  residual_findings: SensitiveFinding[];
-  warning_message: string;
-}
-
-export interface ConsentResponse {
-  consent_id: string;
-  content_hash: string;
-  destination_provider: string;
-  consented_at: string;
-  expires_at: string;
-  status: string;
+export interface DocumentUploadResult {
+  document_id: string;
+  version_id: string;
+  title: string;
+  original_filename: string;
+  page_count: number;
+  char_count: number;
+  raw_content_hash: string;
+  raw_text: string;
 }
 
 export interface ClauseExplanation {
   clause_title: string;
-  raw_text: string;
-  simplified_explanation: string;
-  risk_level: 'LOW' | 'MEDIUM' | 'HIGH';
-  legal_context?: string | null;
+  raw_clause_text: string;
+  plain_explanation: string;
+  category: string;
+  impact_level: string;
 }
 
 export interface PotentialConcern {
-  concern_title: string;
-  severity: 'INFO' | 'WARNING' | 'CRITICAL';
-  description: string;
-  suggested_remedy?: string | null;
+  issue_title: string;
+  concern_text: string;
+  severity: string;
+  suggested_question: string;
+  legal_basis?: string;
 }
 
 export interface DocumentDeadline {
-  obligation_title: string;
-  explicit_date?: string | null;
-  calculated_date?: string | null;
+  deadline_title: string;
+  explicit_date_or_duration: string;
   is_inferred: boolean;
-  notice_period_days?: number | null;
-  penalty_notes?: string | null;
+  consequence_of_missing: string;
+  reminder_suggested: boolean;
 }
 
 export interface DocumentAnalysisResult {
+  analysis_id: string;
+  version_id: string;
   overview: string;
-  plain_language_summary: string;
-  processing_status: string;
-  ai_provider: string;
-  model_name: string;
-  is_demo_mode: boolean;
-  clauses: ClauseExplanation[];
-  concerns: PotentialConcern[];
-  deadlines: DocumentDeadline[];
-  questions_to_ask_lawyer: string[];
+  plain_summary: string;
+  clause_explanations: ClauseExplanation[];
+  potential_concerns: PotentialConcern[];
+  document_deadlines: DocumentDeadline[];
+  questions_for_lawyer: string[];
   suggested_next_steps: string[];
+  disclaimer: string;
 }
 
 export interface CompareResult {
-  summary: string;
-  added_lines_count: number;
-  removed_lines_count: number;
+  summary_of_changes: string;
+  diff_json: string;
+  added_lines: number;
+  removed_lines: number;
+  modified_lines: number;
   payment_changes: string;
   termination_changes: string;
-  liability_changes: string;
   notice_changes: string;
-  diff_blocks: Array<{
-    type: 'unchanged' | 'modified' | 'added' | 'removed';
-    base_lines: string[];
-    target_lines: string[];
-  }>;
-}
-
-export interface LegalSource {
-  id: string;
-  title: string;
-  short_name: string;
-  source_type: string;
-  issuing_authority?: string | null;
-  official_url?: string | null;
-  jurisdiction_id: string;
-  is_verified: boolean;
+  liability_changes: string;
 }
 
 export interface KnowledgeArticle {
   id: string;
-  title: string;
   slug: string;
+  title: string;
   category: string;
-  summary: string;
-  content_markdown: string;
-  jurisdiction_id?: string | null;
+  plain_language_intro: string;
+  key_points: string[];
+  everyday_examples: string;
+  faqs: { question: string; answer: string }[];
+  practical_checklist: string[];
+  disclaimer: string;
+  verified_at?: string;
   is_published: boolean;
-  updated_at?: string | null;
 }
 
-export interface LegalAidResource {
+export interface ActionChecklistItem {
   id: string;
-  name: string;
+  title: string;
+  description: string;
+  importance: string;
+  law_reference: string;
+}
+
+export interface ActionChecklist {
+  id: string;
+  title: string;
   category: string;
   description: string;
-  official_url?: string | null;
-  helpline_phone?: string | null;
-  address?: string | null;
-  jurisdiction_id?: string | null;
-  is_verified: boolean;
+  items: ActionChecklistItem[];
 }

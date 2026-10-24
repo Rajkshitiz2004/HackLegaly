@@ -1,188 +1,185 @@
 import {
   Jurisdiction,
-  LegalAssistantResponse,
-  DetectPrivacyResponse,
-  RedactResponse,
-  SecondScanResponse,
-  ConsentResponse,
+  AssistantResponse,
+  SensitiveFinding,
+  DocumentUploadResult,
   DocumentAnalysisResult,
   CompareResult,
   KnowledgeArticle,
   LegalAidResource,
-  LegalSource,
+  ActionChecklist,
 } from '../types';
 
 const API_BASE = '/api';
 
-async function handleResponse<T>(res: Response): Promise<T> {
+export async function fetchJurisdictions(): Promise<Jurisdiction[]> {
+  const res = await fetch(`${API_BASE}/jurisdictions`);
+  if (!res.ok) throw new Error('Failed to load jurisdictions');
+  return res.json();
+}
+
+export async function askAssistant(params: {
+  query_text: string;
+  jurisdiction_code?: string;
+  category?: string;
+  session_id?: string;
+}): Promise<AssistantResponse> {
+  const res = await fetch(`${API_BASE}/legal-assistant`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
   if (!res.ok) {
-    let errorDetail = `Request failed with status ${res.status}`;
-    try {
-      const errorJson = await res.json();
-      if (errorJson.detail) {
-        errorDetail = typeof errorJson.detail === 'string' ? errorJson.detail : JSON.stringify(errorJson.detail);
-      }
-    } catch {
-      // ignore
-    }
-    throw new Error(errorDetail);
+    const err = await res.json().catch(() => ({ detail: 'Failed to generate assistant response' }));
+    throw new Error(err.detail || 'Assistant request failed');
   }
   return res.json();
 }
 
-export const api = {
-  // Jurisdictions
-  async getJurisdictions(): Promise<Jurisdiction[]> {
-    const res = await fetch(`${API_BASE}/jurisdictions`);
-    return handleResponse<Jurisdiction[]>(res);
-  },
+export async function detectPrivacy(text: string, custom_terms?: string[]): Promise<{
+  findings_count: number;
+  findings: SensitiveFinding[];
+  raw_content_hash: string;
+}> {
+  const res = await fetch(`${API_BASE}/privacy/detect`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, custom_terms }),
+  });
+  if (!res.ok) throw new Error('Sensitive information detection failed');
+  return res.json();
+}
 
-  // Legal Assistant
-  async getSuggestedQuestions(): Promise<Array<{ id: string; title: string; query: string; category: string }>> {
-    const res = await fetch(`${API_BASE}/legal-assistant/suggested`);
-    return handleResponse(res);
-  },
+export async function applyRedactions(
+  text: string,
+  findings: SensitiveFinding[],
+  custom_replacements?: Record<string, string>
+): Promise<{
+  sanitized_text: string;
+  content_hash: string;
+  redactions_applied: number;
+}> {
+  const res = await fetch(`${API_BASE}/privacy/redact`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, findings, custom_replacements }),
+  });
+  if (!res.ok) throw new Error('Redaction processing failed');
+  return res.json();
+}
 
-  async askLegalAssistant(query: string, jurisdictionCode: string = 'IN-CENTRAL', sessionId?: string): Promise<LegalAssistantResponse> {
-    const res = await fetch(`${API_BASE}/legal-assistant`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, jurisdiction_code: jurisdictionCode, session_id: sessionId }),
-    });
-    return handleResponse<LegalAssistantResponse>(res);
-  },
+export async function runSecondScan(sanitized_text: string): Promise<{
+  is_clean: boolean;
+  residual_count: number;
+  residual_findings: SensitiveFinding[];
+  message: string;
+}> {
+  const res = await fetch(`${API_BASE}/privacy/second-scan`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sanitized_text }),
+  });
+  if (!res.ok) throw new Error('Verification second scan failed');
+  return res.json();
+}
 
-  // Knowledge & Resources
-  async getLegalSources(jurisdictionId?: string): Promise<LegalSource[]> {
-    const url = jurisdictionId ? `${API_BASE}/legal-sources?jurisdiction_id=${jurisdictionId}` : `${API_BASE}/legal-sources`;
-    const res = await fetch(url);
-    return handleResponse<LegalSource[]>(res);
-  },
+export async function grantConsent(params: {
+  version_id: string;
+  content_hash: string;
+  user_affirmation: boolean;
+  destination_service?: string;
+  purpose?: string;
+  session_id?: string;
+}): Promise<{
+  consent_id: string;
+  version_id: string;
+  content_hash: string;
+  is_valid: boolean;
+  granted_at: string;
+  message: string;
+}> {
+  const res = await fetch(`${API_BASE}/privacy/consent`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to record consent' }));
+    throw new Error(err.detail || 'Consent recording failed');
+  }
+  return res.json();
+}
 
-  async getLegalGuides(category?: string, search?: string): Promise<KnowledgeArticle[]> {
-    const params = new URLSearchParams();
-    if (category && category !== 'ALL') params.append('category', category);
-    if (search) params.append('search', search);
-    const res = await fetch(`${API_BASE}/legal-guides?${params.toString()}`);
-    return handleResponse<KnowledgeArticle[]>(res);
-  },
+export async function uploadDocument(formData: FormData): Promise<DocumentUploadResult> {
+  const res = await fetch(`${API_BASE}/documents/upload`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Document upload failed' }));
+    throw new Error(err.detail || 'Document upload failed');
+  }
+  return res.json();
+}
 
-  async getLegalGuideBySlug(slug: string): Promise<KnowledgeArticle> {
-    const res = await fetch(`${API_BASE}/legal-guides/${slug}`);
-    return handleResponse<KnowledgeArticle>(res);
-  },
+export async function analyzeDocument(params: {
+  version_id: string;
+  content_hash: string;
+  sanitized_text: string;
+  document_type?: string;
+}): Promise<DocumentAnalysisResult> {
+  const res = await fetch(`${API_BASE}/documents/analyze`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Analysis failed or consent violation' }));
+    throw new Error(err.detail || 'Analysis failed');
+  }
+  return res.json();
+}
 
-  async getResources(category?: string): Promise<LegalAidResource[]> {
-    const url = category && category !== 'ALL' ? `${API_BASE}/resources?category=${category}` : `${API_BASE}/resources`;
-    const res = await fetch(url);
-    return handleResponse<LegalAidResource[]>(res);
-  },
+export async function compareDocuments(params: {
+  source_text: string;
+  target_text: string;
+  source_title?: string;
+  target_title?: string;
+}): Promise<CompareResult> {
+  const res = await fetch(`${API_BASE}/documents/compare`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) throw new Error('Contract comparison failed');
+  return res.json();
+}
 
-  // Document Simplifier & Privacy
-  async getSyntheticSample(): Promise<{ title: string; document_type: string; text: string; sample_entities_expected: string[] }> {
-    const res = await fetch(`${API_BASE}/documents/synthetic-sample`);
-    return handleResponse(res);
-  },
+export async function fetchKnowledgeGuides(category?: string, query?: string): Promise<KnowledgeArticle[]> {
+  const url = new URL(`${window.location.origin}${API_BASE}/legal-guides`);
+  if (category) url.searchParams.set('category', category);
+  if (query) url.searchParams.set('q', query);
+  const res = await fetch(url.toString());
+  if (!res.ok) throw new Error('Failed to load legal guides');
+  return res.json();
+}
 
-  async uploadDocument(file?: File, rawText?: string, title?: string): Promise<any> {
-    const formData = new FormData();
-    if (file) formData.append('file', file);
-    if (rawText) formData.append('raw_text', rawText);
-    if (title) formData.append('title', title);
+export async function fetchGuideBySlug(slug: string): Promise<KnowledgeArticle> {
+  const res = await fetch(`${API_BASE}/legal-guides/${slug}`);
+  if (!res.ok) throw new Error('Legal guide not found');
+  return res.json();
+}
 
-    const res = await fetch(`${API_BASE}/documents/upload`, {
-      method: 'POST',
-      body: formData,
-    });
-    return handleResponse(res);
-  },
+export async function fetchResources(resource_type?: string): Promise<LegalAidResource[]> {
+  const url = new URL(`${window.location.origin}${API_BASE}/resources`);
+  if (resource_type) url.searchParams.set('resource_type', resource_type);
+  const res = await fetch(url.toString());
+  if (!res.ok) throw new Error('Failed to load legal aid resources');
+  return res.json();
+}
 
-  async detectPII(text: string, customTerms?: string[]): Promise<DetectPrivacyResponse> {
-    const res = await fetch(`${API_BASE}/privacy/detect`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, custom_terms: customTerms || [] }),
-    });
-    return handleResponse<DetectPrivacyResponse>(res);
-  },
-
-  async redactText(originalText: string, redactions: any[], documentVersionId?: string): Promise<RedactResponse> {
-    const res = await fetch(`${API_BASE}/privacy/redact`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        original_text: originalText,
-        redactions,
-        document_version_id: documentVersionId,
-      }),
-    });
-    return handleResponse<RedactResponse>(res);
-  },
-
-  async runSecondScan(redactedText: string): Promise<SecondScanResponse> {
-    const res = await fetch(`${API_BASE}/privacy/second-scan`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ redacted_text: redactedText }),
-    });
-    return handleResponse<SecondScanResponse>(res);
-  },
-
-  async grantConsent(contentHash: string, documentVersionId?: string, affirmativeAction: boolean = true): Promise<ConsentResponse> {
-    const res = await fetch(`${API_BASE}/privacy/consent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        content_hash: contentHash,
-        document_version_id: documentVersionId || 'ephemeral-version',
-        affirmative_action: affirmativeAction,
-        destination_provider: 'google-gemini',
-        purpose: 'LEGAL_DOCUMENT_SIMPLIFICATION',
-      }),
-    });
-    return handleResponse<ConsentResponse>(res);
-  },
-
-  async analyzeDocument(text: string, contentHash: string, documentVersionId?: string): Promise<DocumentAnalysisResult> {
-    const res = await fetch(`${API_BASE}/documents/analyze`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text,
-        content_hash: contentHash,
-        document_version_id: documentVersionId || 'ephemeral-version',
-      }),
-    });
-    return handleResponse<DocumentAnalysisResult>(res);
-  },
-
-  async compareDocuments(baseText: string, targetText: string): Promise<CompareResult> {
-    const res = await fetch(`${API_BASE}/documents/compare`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ base_text: baseText, target_text: targetText }),
-    });
-    return handleResponse<CompareResult>(res);
-  },
-
-  // Navigator
-  async getNavigatorQuestions(): Promise<any[]> {
-    const res = await fetch(`${API_BASE}/navigator/questions`);
-    return handleResponse(res);
-  },
-
-  async evaluateNavigator(category: string, responses: Record<string, string>): Promise<any> {
-    const res = await fetch(`${API_BASE}/navigator/evaluate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ category, responses }),
-    });
-    return handleResponse(res);
-  },
-
-  // System Health
-  async getHealth(): Promise<{ status: string; service: string; demo_mode: boolean; ai_provider: string; database: string }> {
-    const res = await fetch(`${API_BASE}/health`);
-    return handleResponse(res);
-  },
-};
+export async function fetchChecklists(): Promise<ActionChecklist[]> {
+  const res = await fetch(`${API_BASE}/checklists`);
+  if (!res.ok) throw new Error('Failed to load checklists');
+  return res.json();
+}

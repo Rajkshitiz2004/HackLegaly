@@ -1,8 +1,11 @@
 import logging
+from pathlib import Path
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from contextlib import asynccontextmanager
+from fastapi.responses import FileResponse, JSONResponse
+from sqlalchemy import text
 
 from backend.app.config import settings
 from backend.app.database import engine, Base, SessionLocal
@@ -19,6 +22,8 @@ from backend.app.api.checklists import router as checklists_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("legal_assistant")
+
+FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -44,11 +49,13 @@ app = FastAPI(
     openapi_url="/api/openapi.json",
 )
 
-# CORS Middleware
+# CORS Middleware — localhost-only origins break every split frontend/backend deploy.
+cors_origins = settings.cors_origins()
+allow_credentials = "*" not in cors_origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
-    allow_credentials=True,
+    allow_origins=cors_origins,
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -74,21 +81,54 @@ app.include_router(knowledge_router, prefix=settings.API_V1_STR)
 app.include_router(resources_router, prefix=settings.API_V1_STR)
 app.include_router(checklists_router, prefix=settings.API_V1_STR)
 
-@app.get("/")
-def root():
+def _api_root_payload():
     return {
         "app": settings.PROJECT_NAME,
         "version": settings.VERSION,
         "status": "operational",
         "docs": "/api/docs",
         "jurisdiction": "India (Central & States)",
-        "privacy": "Zero-Knowledge Ephemeral Redaction Gate Enforced"
+        "privacy": "Zero-Knowledge Ephemeral Redaction Gate Enforced",
     }
+
+
+@app.get("/")
+def root():
+    index = FRONTEND_DIST / "index.html"
+    if index.is_file():
+        return FileResponse(index)
+    return _api_root_payload()
+
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "healthy", "database": "connected"}
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return {"status": "healthy", "database": "connected"}
+    except Exception as exc:
+        return JSONResponse(
+            {"status": "degraded", "database": str(exc)},
+            status_code=503,
+        )
+
+
+@app.get("/{full_path:path}")
+def serve_spa(full_path: str):
+    """Serve the production frontend so /api relative calls hit this same host."""
+    if full_path.startswith("api"):
+        return JSONResponse({"detail": "Not Found"}, status_code=404)
+
+    index = FRONTEND_DIST / "index.html"
+    if not index.is_file():
+        return JSONResponse(_api_root_payload())
+
+    candidate = FRONTEND_DIST / full_path
+    if candidate.is_file():
+        return FileResponse(candidate)
+    return FileResponse(index)
+
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("backend.app.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("backend.app.main:app", host="0.0.0.0", port=settings.PORT, reload=True)

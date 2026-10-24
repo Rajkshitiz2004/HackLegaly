@@ -10,7 +10,7 @@ import {
   ActionChecklist,
 } from '../types';
 
-const API_BASE = '/api';
+const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 
 export async function fetchJurisdictions(): Promise<Jurisdiction[]> {
   const res = await fetch(`${API_BASE}/jurisdictions`);
@@ -155,11 +155,21 @@ export async function compareDocuments(params: {
   return res.json();
 }
 
+function apiUrl(path: string, params?: Record<string, string | undefined>): string {
+  const base = API_BASE.startsWith('http')
+    ? API_BASE
+    : `${window.location.origin}${API_BASE.startsWith('/') ? API_BASE : `/${API_BASE}`}`;
+  const url = new URL(`${base}${path.startsWith('/') ? path : `/${path}`}`);
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) url.searchParams.set(key, value);
+    });
+  }
+  return url.toString();
+}
+
 export async function fetchKnowledgeGuides(category?: string, query?: string): Promise<KnowledgeArticle[]> {
-  const url = new URL(`${window.location.origin}${API_BASE}/legal-guides`);
-  if (category) url.searchParams.set('category', category);
-  if (query) url.searchParams.set('q', query);
-  const res = await fetch(url.toString());
+  const res = await fetch(apiUrl('/legal-guides', { category, q: query }));
   if (!res.ok) throw new Error('Failed to load legal guides');
   return res.json();
 }
@@ -171,9 +181,7 @@ export async function fetchGuideBySlug(slug: string): Promise<KnowledgeArticle> 
 }
 
 export async function fetchResources(resource_type?: string): Promise<LegalAidResource[]> {
-  const url = new URL(`${window.location.origin}${API_BASE}/resources`);
-  if (resource_type) url.searchParams.set('resource_type', resource_type);
-  const res = await fetch(url.toString());
+  const res = await fetch(apiUrl('/resources', { resource_type }));
   if (!res.ok) throw new Error('Failed to load legal aid resources');
   return res.json();
 }

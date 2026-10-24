@@ -27,6 +27,8 @@ services:
       - DATABASE_URL=postgresql://postgres:postgrespassword@db:5432/legal_assistant_db
       - SECRET_KEY=hacktoberfest-legal-privacy-secure-key-2026
       - DEMO_MODE=true
+      - ALLOWED_ORIGINS=*
+      - PORT=8000
     ports:
       - "8000:8000"
     depends_on:
@@ -39,7 +41,7 @@ services:
       dockerfile: Dockerfile
     container_name: nyayamitra_frontend
     ports:
-      - "5173:5173"
+      - "5173:80"
     depends_on:
       - backend
 

@@ -10,6 +10,9 @@ Base = declarative_base()
 # Attempt to connect to PostgreSQL, fallback to SQLite if connection fails
 connect_args = {}
 db_url = settings.DATABASE_URL
+# Render/Heroku/Railway provide postgres:// which SQLAlchemy 2 requires as postgresql://
+if db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql://", 1)
 
 if db_url.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
